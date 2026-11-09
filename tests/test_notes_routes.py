@@ -150,7 +150,16 @@ def test_list_on_an_empty_team_is_an_empty_page(client):
     assert client.get("/notes", headers=TEAM_A).json() == {"items": [], "total": 0}
 
 
-@pytest.mark.parametrize("query", ["limit=0", "limit=101", "offset=-1", "limit=abc"])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "limit=0",
+        "limit=101",
+        "offset=-1",
+        "limit=abc",
+        "offset=99999999999999999999",  # bigger than the database can hold
+    ],
+)
 def test_list_with_bad_paging_is_422(client, query):
     response = client.get(f"/notes?{query}", headers=TEAM_A)
 

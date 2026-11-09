@@ -3,6 +3,7 @@ import pytest
 from src.errors import InvalidInputError, NotFoundError
 from src.services.notes import (
     MAX_BODY_LENGTH,
+    MAX_OFFSET,
     MAX_PAGE_SIZE,
     MAX_SEARCH_LENGTH,
     MAX_TAG_LENGTH,
@@ -116,9 +117,16 @@ def test_list_accepts_the_largest_allowed_limit(service):
     assert total == 1
 
 
-def test_list_rejects_negative_offset(service):
-    with pytest.raises(InvalidInputError, match="offset"):
-        service.list_notes("team-a", offset=-1)
+@pytest.mark.parametrize("offset", [-1, MAX_OFFSET + 1, 10**20])
+def test_list_rejects_offsets_outside_the_allowed_range(service, offset):
+    with pytest.raises(InvalidInputError, match="offset must be between"):
+        service.list_notes("team-a", offset=offset)
+
+
+def test_list_accepts_the_largest_allowed_offset(service):
+    service.create("team-a", "u", "T", "B")
+
+    assert service.list_notes("team-a", offset=MAX_OFFSET) == ([], 1)
 
 
 # ---- update ---------------------------------------------------------

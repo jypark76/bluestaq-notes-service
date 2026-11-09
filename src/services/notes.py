@@ -8,6 +8,7 @@ MAX_TAGS_PER_NOTE = 20
 MAX_TAG_LENGTH = 30
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+MAX_OFFSET = 1_000_000
 MAX_SEARCH_LENGTH = 100
 
 
@@ -53,8 +54,9 @@ class NoteService:
     ) -> tuple[list[Note], int]:
         if not 1 <= limit <= MAX_PAGE_SIZE:
             raise InvalidInputError(f"limit must be between 1 and {MAX_PAGE_SIZE}")
-        if offset < 0:
-            raise InvalidInputError("offset must be 0 or more")
+        # The upper limit also keeps a huge number from overflowing the database.
+        if not 0 <= offset <= MAX_OFFSET:
+            raise InvalidInputError(f"offset must be between 0 and {MAX_OFFSET}")
         _check_text(q or "", "q")
         _check_text(tag or "", "tag")
         # A blank search word or blank tag filter is treated as "not given".

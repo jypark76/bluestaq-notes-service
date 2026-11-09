@@ -35,7 +35,7 @@ Every `/notes` call needs two headers: `X-Team-Id` (whose notes) and `X-User-Id`
 | Endpoint | What it does |
 |---|---|
 | `POST /notes` | Create a note (201). Body: `title`, `body`, optional `tags`. |
-| `GET /notes` | List the team's notes, newest edit first. Query: `q` (search title and body), `tag`, `limit` (1 to 100, default 20), `offset`. Returns `{items, total}`. |
+| `GET /notes` | List the team's notes, newest edit first. Query: `q` (search title and body), `tag`, `limit` (1 to 100, default 20), `offset` (0 to 1,000,000). Returns `{items, total}`. |
 | `GET /notes/{id}` | Fetch one note. |
 | `PATCH /notes/{id}` | Change any of `title`, `body`, `tags`. Fields you leave out stay as they are. |
 | `DELETE /notes/{id}` | Delete a note (204). |
