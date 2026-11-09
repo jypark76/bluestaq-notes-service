@@ -116,6 +116,20 @@ def test_a_deleted_note_no_longer_shows_up_in_search_or_tag_filter(store):
     assert store.list_notes("team-a", tag="finance") == ([], 0)
 
 
+def test_each_note_in_a_page_gets_its_own_tags(store):
+    store.create("team-a", "u", "one", "b", ["x"])
+    store.create("team-a", "u", "two", "b", ["y", "z"])
+    store.create("team-a", "u", "none", "b")
+
+    notes, _ = store.list_notes("team-a")
+
+    assert {n.title: n.tags for n in notes} == {
+        "one": ["x"],
+        "two": ["y", "z"],
+        "none": [],
+    }
+
+
 # ---- search and tag filter -------------------------------------------
 
 

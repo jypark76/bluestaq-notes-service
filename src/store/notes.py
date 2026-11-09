@@ -122,7 +122,7 @@ class NoteStore:
                 " ORDER BY updated_at DESC, id LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             ).fetchall()
-            return [self._to_note(row) for row in rows], total
+            return self._to_notes(rows), total
 
     # ---- update ----------------------------------------------------
 
@@ -171,22 +171,39 @@ class NoteStore:
         row = self._db.execute(
             "SELECT * FROM notes WHERE id = ? AND team_id = ?", (note_id, team_id)
         ).fetchone()
-        return self._to_note(row) if row else None
+        return self._to_notes([row])[0] if row else None
 
-    def _to_note(self, row: sqlite3.Row) -> Note:
+    def _to_notes(self, rows: list[sqlite3.Row]) -> list[Note]:
+        """Turn rows into notes, loading every note's tags in one query.
+
+        A page is at most 100 notes (the service enforces that), so the list
+        of ids stays well inside SQLite's limit on query parameters.
+        """
+        if not rows:
+            return []
+        ids = [row["id"] for row in rows]
+        marks = ",".join("?" * len(ids))
         tag_rows = self._db.execute(
-            "SELECT tag FROM note_tags WHERE note_id = ? ORDER BY tag", (row["id"],)
+            f"SELECT note_id, tag FROM note_tags WHERE note_id IN ({marks})"
+            " ORDER BY tag",
+            ids,
         ).fetchall()
-        return Note(
-            id=row["id"],
-            team_id=row["team_id"],
-            author_id=row["author_id"],
-            title=row["title"],
-            body=row["body"],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-            tags=[t["tag"] for t in tag_rows],
-        )
+        tags_by_note: dict[str, list[str]] = {}
+        for tag_row in tag_rows:
+            tags_by_note.setdefault(tag_row["note_id"], []).append(tag_row["tag"])
+        return [
+            Note(
+                id=row["id"],
+                team_id=row["team_id"],
+                author_id=row["author_id"],
+                title=row["title"],
+                body=row["body"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+                tags=tags_by_note.get(row["id"], []),
+            )
+            for row in rows
+        ]
 
     def _write_tags(self, note_id: str, tags: list[str]) -> None:
         """Replace a note's tags with exactly this list."""
