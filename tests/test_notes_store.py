@@ -122,3 +122,77 @@ def test_deleting_a_note_also_deletes_its_tags(store):
     leftover = store._db.execute("SELECT COUNT(*) FROM note_tags").fetchone()[0]
 
     assert leftover == 0
+
+
+# ---- search and tag filter -------------------------------------------
+
+
+def test_search_matches_title_or_body_ignoring_letter_case(store):
+    store.create("team-a", "u", "Budget Review", "numbers")
+    store.create("team-a", "u", "Lunch", "talk about the BUDGET")
+    store.create("team-a", "u", "Unrelated", "nothing here")
+
+    notes, total = store.list_notes("team-a", q="budget")
+
+    assert total == 2
+    assert {n.title for n in notes} == {"Budget Review", "Lunch"}
+
+
+def test_search_never_returns_another_teams_notes(store):
+    store.create("team-a", "u", "Mine", "budget")
+    store.create("team-b", "u", "Theirs", "budget")
+
+    notes, total = store.list_notes("team-a", q="budget")
+
+    assert total == 1
+    assert notes[0].title == "Mine"
+
+
+def test_search_treats_percent_and_underscore_as_plain_characters(store):
+    store.create("team-a", "u", "Goal", "reach 100% by June")
+    store.create("team-a", "u", "Names", "use snake_case here")
+    store.create("team-a", "u", "Plain", "nothing special")
+
+    percent, _ = store.list_notes("team-a", q="%")
+    underscore, _ = store.list_notes("team-a", q="_")
+
+    assert [n.title for n in percent] == ["Goal"]
+    assert [n.title for n in underscore] == ["Names"]
+
+
+def test_search_with_no_match_is_empty(store):
+    store.create("team-a", "u", "T", "B")
+
+    assert store.list_notes("team-a", q="zzz") == ([], 0)
+
+
+def test_tag_filter_matches_the_exact_tag_only(store):
+    store.create("team-a", "u", "Has", "b", ["work"])
+    store.create("team-a", "u", "Close", "b", ["workout"])
+    store.create("team-a", "u", "None", "b")
+
+    notes, total = store.list_notes("team-a", tag="work")
+
+    assert total == 1
+    assert notes[0].title == "Has"
+
+
+def test_tag_filter_never_returns_another_teams_notes(store):
+    store.create("team-a", "u", "Mine", "b", ["work"])
+    store.create("team-b", "u", "Theirs", "b", ["work"])
+
+    notes, total = store.list_notes("team-a", tag="work")
+
+    assert [n.title for n in notes] == ["Mine"]
+    assert total == 1
+
+
+def test_search_and_tag_combine_and_total_ignores_paging(store):
+    for i in range(3):
+        store.create("team-a", "u", f"Plan {i}", "budget", ["work"])
+    store.create("team-a", "u", "Other", "budget", ["home"])
+
+    notes, total = store.list_notes("team-a", limit=2, q="budget", tag="work")
+
+    assert total == 3  # all three matches, even though the page holds two
+    assert len(notes) == 2

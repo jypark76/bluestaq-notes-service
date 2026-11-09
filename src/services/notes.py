@@ -8,6 +8,7 @@ MAX_TAGS_PER_NOTE = 20
 MAX_TAG_LENGTH = 30
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+MAX_SEARCH_LENGTH = 100
 
 
 class NoteService:
@@ -43,13 +44,23 @@ class NoteService:
         return note
 
     def list_notes(
-        self, team_id: str, limit: int = DEFAULT_PAGE_SIZE, offset: int = 0
+        self,
+        team_id: str,
+        limit: int = DEFAULT_PAGE_SIZE,
+        offset: int = 0,
+        q: str | None = None,
+        tag: str | None = None,
     ) -> tuple[list[Note], int]:
         if not 1 <= limit <= MAX_PAGE_SIZE:
             raise InvalidInputError(f"limit must be between 1 and {MAX_PAGE_SIZE}")
         if offset < 0:
             raise InvalidInputError("offset must be 0 or more")
-        return self._store.list_notes(team_id, limit, offset)
+        # A blank search word or blank tag filter is treated as "not given".
+        q = (q or "").strip() or None
+        tag = (tag or "").strip().lower() or None
+        if q and len(q) > MAX_SEARCH_LENGTH:
+            raise InvalidInputError(f"q must be {MAX_SEARCH_LENGTH} characters or fewer")
+        return self._store.list_notes(team_id, limit, offset, q=q, tag=tag)
 
     def update(
         self,

@@ -32,6 +32,11 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _escape_like(text: str) -> str:
+    """Make % and _ in a search word match themselves instead of acting as wildcards."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class NoteStore:
     """Saves and loads notes in SQLite.
 
@@ -80,17 +85,40 @@ class NoteStore:
             return self._fetch(team_id, note_id)
 
     def list_notes(
-        self, team_id: str, limit: int = 20, offset: int = 0
+        self,
+        team_id: str,
+        limit: int = 20,
+        offset: int = 0,
+        q: str | None = None,
+        tag: str | None = None,
     ) -> tuple[list[Note], int]:
-        """Return one page of the team's notes (newest edit first) and the total."""
+        """Return one page of the team's notes (newest edit first) and the total.
+
+        q keeps notes whose title or body contains that text (any letter case).
+        tag keeps notes that carry exactly that tag. The total counts every
+        match, not just this page.
+        """
+        # The team check always comes first, so a filter can never reach
+        # another team's notes.
+        where = ["team_id = ?"]
+        params: list[str] = [team_id]
+        if q:
+            pattern = f"%{_escape_like(q)}%"
+            where.append("(title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\')")
+            params += [pattern, pattern]
+        if tag:
+            where.append("id IN (SELECT note_id FROM note_tags WHERE tag = ?)")
+            params.append(tag)
+        condition = " AND ".join(where)
+
         with self._lock:
             total = self._db.execute(
-                "SELECT COUNT(*) FROM notes WHERE team_id = ?", (team_id,)
+                f"SELECT COUNT(*) FROM notes WHERE {condition}", params
             ).fetchone()[0]
             rows = self._db.execute(
-                "SELECT * FROM notes WHERE team_id = ?"
+                f"SELECT * FROM notes WHERE {condition}"
                 " ORDER BY updated_at DESC, id LIMIT ? OFFSET ?",
-                (team_id, limit, offset),
+                [*params, limit, offset],
             ).fetchall()
             return [self._to_note(row) for row in rows], total
 

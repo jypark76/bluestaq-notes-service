@@ -4,6 +4,7 @@ from src.errors import InvalidInputError, NotFoundError
 from src.services.notes import (
     MAX_BODY_LENGTH,
     MAX_PAGE_SIZE,
+    MAX_SEARCH_LENGTH,
     MAX_TAG_LENGTH,
     MAX_TAGS_PER_NOTE,
     MAX_TITLE_LENGTH,
@@ -190,3 +191,43 @@ def test_delete_other_teams_note_raises_not_found_and_keeps_it(service):
         service.delete("team-b", created.id)
 
     assert service.get("team-a", created.id) == created
+
+
+# ---- search and tag filter -------------------------------------------
+
+
+def test_list_filters_by_search_word_and_tag(service):
+    service.create("team-a", "u", "Budget", "numbers", ["finance"])
+    service.create("team-a", "u", "Lunch", "budget talk", ["food"])
+
+    by_word, _ = service.list_notes("team-a", q="budget")
+    by_tag, _ = service.list_notes("team-a", tag="finance")
+    both, _ = service.list_notes("team-a", q="budget", tag="food")
+
+    assert len(by_word) == 2
+    assert [n.title for n in by_tag] == ["Budget"]
+    assert [n.title for n in both] == ["Lunch"]
+
+
+def test_tag_filter_ignores_letter_case_and_spaces(service):
+    service.create("team-a", "u", "T", "B", ["work"])
+
+    notes, _ = service.list_notes("team-a", tag="  WORK ")
+
+    assert len(notes) == 1
+
+
+def test_blank_search_and_blank_tag_mean_no_filter(service):
+    service.create("team-a", "u", "T", "B", ["work"])
+
+    notes, total = service.list_notes("team-a", q="   ", tag="")
+
+    assert total == 1
+    assert len(notes) == 1
+
+
+def test_search_word_length_limit_is_inclusive(service):
+    service.list_notes("team-a", q="x" * MAX_SEARCH_LENGTH)
+
+    with pytest.raises(InvalidInputError, match="q must"):
+        service.list_notes("team-a", q="x" * (MAX_SEARCH_LENGTH + 1))

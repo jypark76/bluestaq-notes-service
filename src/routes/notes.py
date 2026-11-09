@@ -45,10 +45,12 @@ def create_note(
 def list_notes(
     limit: int = DEFAULT_PAGE_SIZE,
     offset: int = 0,
+    q: str | None = None,
+    tag: str | None = None,
     who: Identity = Depends(get_identity),
     service: NoteService = Depends(get_service),
 ):
-    notes, total = service.list_notes(who.team_id, limit, offset)
+    notes, total = service.list_notes(who.team_id, limit, offset, q=q, tag=tag)
     return NoteList(items=notes, total=total)
 
 

@@ -214,3 +214,36 @@ def test_delete_other_teams_note_is_404_and_keeps_it(client):
 
     assert_error(response, 404, "not_found")
     assert client.get(f"/notes/{created['id']}", headers=TEAM_A).status_code == 200
+
+
+# ---- search and tag filter -------------------------------------------
+
+
+def test_list_filters_by_q_and_tag_within_the_team(client):
+    make_note(client, TEAM_A, title="Budget", body="numbers", tags=["finance"])
+    make_note(client, TEAM_A, title="Lunch", body="budget talk", tags=["food"])
+    make_note(client, TEAM_B, title="Theirs", body="budget", tags=["finance"])
+
+    by_word = client.get("/notes?q=BUDGET", headers=TEAM_A).json()
+    by_tag = client.get("/notes?tag=Finance", headers=TEAM_A).json()
+    both = client.get("/notes?q=budget&tag=food", headers=TEAM_A).json()
+
+    assert by_word["total"] == 2
+    assert [n["title"] for n in by_tag["items"]] == ["Budget"]
+    assert [n["title"] for n in both["items"]] == ["Lunch"]
+
+
+def test_search_total_counts_all_matches_across_pages(client):
+    for i in range(3):
+        make_note(client, title=f"Plan {i}", body="budget")
+
+    page = client.get("/notes?q=budget&limit=2", headers=TEAM_A).json()
+
+    assert page["total"] == 3
+    assert len(page["items"]) == 2
+
+
+def test_search_word_that_is_too_long_is_422(client):
+    response = client.get(f"/notes?q={'x' * 101}", headers=TEAM_A)
+
+    assert_error(response, 422, "invalid_input")
