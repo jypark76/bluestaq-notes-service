@@ -192,16 +192,18 @@ def test_patch_with_nothing_to_change_is_422(client):
 
 
 def test_patch_other_teams_note_is_404_and_changes_nothing(client):
-    created = make_note(client, TEAM_A, title="Mine")
+    created = make_note(client, TEAM_A, title="Mine", tags=["keep"])
 
     response = client.patch(
-        f"/notes/{created['id']}", json={"title": "Hacked"}, headers=TEAM_B
+        f"/notes/{created['id']}",
+        json={"title": "Hacked", "tags": ["hacked"]},
+        headers=TEAM_B,
     )
 
     assert_error(response, 404, "not_found")
-    assert (
-        client.get(f"/notes/{created['id']}", headers=TEAM_A).json()["title"] == "Mine"
-    )
+    owners_note = client.get(f"/notes/{created['id']}", headers=TEAM_A).json()
+    assert owners_note["title"] == "Mine"
+    assert owners_note["tags"] == ["keep"]
 
 
 # ---- delete ----------------------------------------------------------
@@ -371,12 +373,18 @@ def test_validation_messages_name_the_field(client):
     assert bad_json.json()["error"]["message"].startswith("body:")
 
 
+def allowed_methods(response):
+    """The methods named in a response's Allow header, as a set."""
+    return {m.strip() for m in response.headers["allow"].split(",")}
+
+
 def test_405_keeps_the_allow_header_listing_the_methods_that_work(client):
     response = client.put("/notes", headers=TEAM_A)
 
     assert_error(response, 405, "method_not_allowed")
-    allowed = {m.strip() for m in response.headers["allow"].split(",")}
-    assert {"GET", "POST"} <= allowed
+    assert allowed_methods(response) == {"GET", "POST"}
+    one_note = client.put("/notes/abc", headers=TEAM_A)
+    assert allowed_methods(one_note) == {"GET", "PATCH", "DELETE"}
 
 
 @pytest.mark.parametrize("raw_body", [b"\xff\xfe{", b"[" * 100_000])

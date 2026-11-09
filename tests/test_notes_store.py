@@ -83,12 +83,14 @@ def test_update_tags_replaces_them_and_empty_list_clears(store):
 
 
 def test_update_from_another_team_changes_nothing(store):
-    created = store.create("team-a", "u", "Mine", "B")
+    created = store.create("team-a", "u", "Mine", "B", ["keep"])
 
-    result = store.update("team-b", created.id, title="Hacked")
+    result = store.update("team-b", created.id, title="Hacked", tags=["hacked"])
 
     assert result is None
-    assert store.get("team-a", created.id).title == "Mine"
+    owners_note = store.get("team-a", created.id)
+    assert owners_note.title == "Mine"
+    assert owners_note.tags == ["keep"]  # the tag write must not slip through
 
 
 def test_delete_removes_the_note(store):
@@ -148,6 +150,18 @@ def test_search_treats_percent_and_underscore_as_plain_characters(store):
 
     assert [n.title for n in percent] == ["Goal"]
     assert [n.title for n in underscore] == ["Names"]
+
+
+def test_search_treats_a_backslash_as_a_plain_character(store):
+    store.create("team-a", "u", "Path", r"open C:\temp\file")
+    store.create("team-a", "u", "Word", "a temporary note")
+    store.create("team-a", "u", "Plain", "nothing special")
+
+    lone, _ = store.list_notes("team-a", q="\\")
+    before_word, _ = store.list_notes("team-a", q="\\temp")
+
+    assert [n.title for n in lone] == ["Path"]
+    assert [n.title for n in before_word] == ["Path"]  # not "temporary"
 
 
 def test_tag_filter_matches_the_exact_tag_only(store):
