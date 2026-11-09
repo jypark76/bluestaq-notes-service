@@ -231,3 +231,21 @@ def test_search_word_length_limit_is_inclusive(service):
 
     with pytest.raises(InvalidInputError, match="q must"):
         service.list_notes("team-a", q="x" * (MAX_SEARCH_LENGTH + 1))
+
+
+# ---- characters the database cannot store -----------------------------
+
+
+def test_text_with_a_lone_surrogate_is_rejected_not_crashed(service):
+    bad = "\ud800"  # legal in JSON, but cannot be saved as UTF-8
+
+    with pytest.raises(InvalidInputError, match="title"):
+        service.create("team-a", "u", bad, "body")
+    with pytest.raises(InvalidInputError, match="body"):
+        service.create("team-a", "u", "Title", bad)
+    with pytest.raises(InvalidInputError, match="tags"):
+        service.create("team-a", "u", "Title", "body", [bad])
+    with pytest.raises(InvalidInputError, match="q"):
+        service.list_notes("team-a", q=bad)
+    with pytest.raises(InvalidInputError, match="tag"):
+        service.list_notes("team-a", tag=bad)

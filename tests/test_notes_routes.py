@@ -316,3 +316,36 @@ def test_unicode_survives_the_full_http_round_trip(client):
     assert fetched["title"] == "Café ☕"
     assert fetched["body"] == "日本語 🎉"
     assert fetched["tags"] == ["ünï"]
+
+
+# ---- characters the database cannot store, and unexpected failures ----
+
+
+@pytest.mark.parametrize(
+    "raw_body",
+    [
+        rb'{"title": "\ud800", "body": "b"}',
+        rb'{"title": "t", "body": "\ud800"}',
+        rb'{"title": "t", "body": "b", "tags": ["\ud800"]}',
+    ],
+)
+def test_lone_surrogate_in_json_is_422_not_500(client, raw_body):
+    response = client.post(
+        "/notes", content=raw_body, headers={**TEAM_A, "Content-Type": "application/json"}
+    )
+
+    assert_error(response, 422, "invalid_input")
+
+
+def test_unexpected_failure_still_uses_the_error_shape_and_hides_details():
+    app = create_app(":memory:")
+    client = TestClient(app, raise_server_exceptions=False)
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("secret database detail")
+
+    app.state.service.get = explode
+    response = client.get("/notes/anything", headers=TEAM_A)
+
+    assert_error(response, 500, "internal_error")
+    assert "secret" not in response.text

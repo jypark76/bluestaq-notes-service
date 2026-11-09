@@ -55,6 +55,8 @@ class NoteService:
             raise InvalidInputError(f"limit must be between 1 and {MAX_PAGE_SIZE}")
         if offset < 0:
             raise InvalidInputError("offset must be 0 or more")
+        _check_text(q or "", "q")
+        _check_text(tag or "", "tag")
         # A blank search word or blank tag filter is treated as "not given".
         q = (q or "").strip() or None
         tag = (tag or "").strip().lower() or None
@@ -92,7 +94,20 @@ class NoteService:
 # ---- cleanup and checks --------------------------------------------
 
 
+def _check_text(value: str, field: str) -> None:
+    """Refuse text that cannot be stored (for example a lone surrogate).
+
+    JSON allows such characters but the database cannot save them. Without
+    this check they would crash the request instead of giving a clear error.
+    """
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise InvalidInputError(f"{field} contains invalid characters") from None
+
+
 def _clean_title(title: str) -> str:
+    _check_text(title, "title")
     title = title.strip()
     if not title:
         raise InvalidInputError("title must not be empty")
@@ -102,6 +117,7 @@ def _clean_title(title: str) -> str:
 
 
 def _clean_body(body: str) -> str:
+    _check_text(body, "body")
     body = body.strip()
     if not body:
         raise InvalidInputError("body must not be empty")
@@ -114,6 +130,7 @@ def _clean_tags(tags: list[str]) -> list[str]:
     """Trim, lowercase and de-duplicate tags, keeping the order given."""
     cleaned: list[str] = []
     for tag in tags:
+        _check_text(tag, "tags")
         tag = tag.strip().lower()
         if not tag:
             raise InvalidInputError("tags must not be empty")

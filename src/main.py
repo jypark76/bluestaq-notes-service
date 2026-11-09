@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import FastAPI, Request, status
@@ -46,6 +47,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.exception_handler(InvalidInputError)
     def invalid_input(_: Request, exc: InvalidInputError):
         return _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_input", str(exc))
+
+    @app.exception_handler(Exception)
+    def unexpected(_: Request, exc: Exception):
+        # A bug on our side. The caller still gets the same error shape,
+        # and the details stay in the server log instead of the response.
+        logging.getLogger("uvicorn.error").exception("unhandled error", exc_info=exc)
+        return _error(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "unexpected error"
+        )
 
     @app.exception_handler(RequestValidationError)
     def bad_shape(_: Request, exc: RequestValidationError):
