@@ -12,3 +12,7 @@ class InvalidInputError(Exception):
 
 class MissingIdentityError(Exception):
     """A required X-Team-Id or X-User-Id header is missing or blank."""
+
+
+class InvalidIdentityError(MissingIdentityError):
+    """An X-Team-Id or X-User-Id header is present but too long."""

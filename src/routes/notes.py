@@ -2,11 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 
-from src.errors import MissingIdentityError
+from src.errors import InvalidIdentityError, MissingIdentityError
 from src.services.notes import DEFAULT_PAGE_SIZE, NoteService
 from src.types import Identity, NoteCreate, NoteList, NoteOut, NoteUpdate
 
 router = APIRouter(prefix="/notes", tags=["notes"])
+
+MAX_IDENTITY_LENGTH = 100
 
 
 def get_identity(
@@ -25,6 +27,11 @@ def get_identity(
         raise MissingIdentityError("X-Team-Id header is required")
     if not user_id:
         raise MissingIdentityError("X-User-Id header is required")
+    for name, value in (("X-Team-Id", team_id), ("X-User-Id", user_id)):
+        if len(value) > MAX_IDENTITY_LENGTH:
+            raise InvalidIdentityError(
+                f"{name} header must be {MAX_IDENTITY_LENGTH} characters or fewer"
+            )
     return Identity(team_id=team_id, user_id=user_id)
 
 

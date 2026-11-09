@@ -99,15 +99,18 @@ class NoteService:
 
 
 def _check_text(value: str, field: str) -> None:
-    """Refuse text that cannot be stored (for example a lone surrogate).
+    """Refuse text the database cannot store or search safely.
 
-    JSON allows such characters but the database cannot save them. Without
-    this check they would crash the request instead of giving a clear error.
+    A lone surrogate is legal in JSON but cannot be saved, and without this
+    check it would crash the request instead of giving a clear error.
     """
     try:
         value.encode("utf-8")
     except UnicodeEncodeError:
         raise InvalidInputError(f"{field} contains invalid characters") from None
+    # SQLite's text matching stops at a NUL, so "q=\x00" would match every note.
+    if "\x00" in value:
+        raise InvalidInputError(f"{field} contains invalid characters")
 
 
 def _clean_title(title: str) -> str:

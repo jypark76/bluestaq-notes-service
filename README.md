@@ -38,9 +38,9 @@ Every `/notes` call needs `X-Team-Id` (whose notes) and `X-User-Id` (the author)
 | `DELETE /notes/{id}` | Delete a note (204). |
 | `GET /health` | Liveness check, no headers. |
 
-Limits: title 200 characters, body 10,000, tags 30 each and 20 per note (trimmed, lowercased, de-duplicated). `q` matches title or body in any letter case, `tag` matches one exact tag, and `total` counts every match.
+Limits: title 200 characters, body 10,000, tags 30 each and 20 per note (trimmed, lowercased, de-duplicated). `q` matches title or body (plain English letters ignore case), `tag` matches one exact tag, and `total` counts every match. Header ids are at most 100 characters, and a request body over 100 KB is refused (checked from the `Content-Length` header only).
 
-Every error has one shape: `{"error": {"code": "not_found", "message": "note not found"}}`. The codes are `missing_header` (400), `not_found` (404), `method_not_allowed` (405, with an `Allow` header), `invalid_input` (422, naming the field) and `http_error` for any other framework error. A 500 (`internal_error`) means a bug on my side, and the details stay in the server log.
+Every error has one shape: `{"error": {"code": "not_found", "message": "note not found"}}`. The codes are `missing_header` and `invalid_header` (400), `not_found` (404), `method_not_allowed` (405, with an `Allow` header), `payload_too_large` (413), `invalid_input` (422, naming the field) and `http_error` for any other framework error. A 500 (`internal_error`) means a bug on my side, and the details stay in the server log.
 
 ## Assumptions
 

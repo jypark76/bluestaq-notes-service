@@ -6,10 +6,19 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import Match
 
-from src.errors import InvalidInputError, MissingIdentityError, NotFoundError
+from src.errors import (
+    InvalidIdentityError,
+    InvalidInputError,
+    MissingIdentityError,
+    NotFoundError,
+)
 from src.routes.notes import router as notes_router
 from src.services.notes import NoteService
 from src.store.notes import NoteStore
+
+# A note at every limit (200-character title, 10,000-character body, 20 tags)
+# is well under 100 KB, even when every character needs a multi-byte escape.
+MAX_REQUEST_BYTES = 100_000
 
 
 def _error(
@@ -41,9 +50,26 @@ def create_app(db_path: str | None = None) -> FastAPI:
         # A simple "are you alive?" check. It needs no headers and no database.
         return {"status": "ok"}
 
+    @app.middleware("http")
+    async def limit_body_size(request: Request, call_next):
+        # Refuse a huge upload before it is read. This checks the declared
+        # Content-Length only, so a client that streams without one is not caught.
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_REQUEST_BYTES:
+            return _error(
+                status.HTTP_413_CONTENT_TOO_LARGE,
+                "payload_too_large",
+                f"request body must be {MAX_REQUEST_BYTES} bytes or fewer",
+            )
+        return await call_next(request)
+
     @app.exception_handler(MissingIdentityError)
     def missing_identity(_: Request, exc: MissingIdentityError):
         return _error(status.HTTP_400_BAD_REQUEST, "missing_header", str(exc))
+
+    @app.exception_handler(InvalidIdentityError)
+    def invalid_identity(_: Request, exc: InvalidIdentityError):
+        return _error(status.HTTP_400_BAD_REQUEST, "invalid_header", str(exc))
 
     @app.exception_handler(NotFoundError)
     def not_found(_: Request, exc: NotFoundError):

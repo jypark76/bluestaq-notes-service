@@ -181,3 +181,19 @@ def test_text_with_a_lone_surrogate_is_rejected_not_crashed(service):
         service.list_notes("team-a", q=bad)
     with pytest.raises(InvalidInputError, match="tag contains"):
         service.list_notes("team-a", tag=bad)
+
+
+def test_text_with_a_nul_character_is_rejected(service):
+    # SQLite's text matching stops at a NUL, so q="\x00" would match every note.
+    nul = "a\x00b"
+
+    with pytest.raises(InvalidInputError, match="title contains"):
+        service.create("team-a", "u", nul, "body")
+    with pytest.raises(InvalidInputError, match="body contains"):
+        service.create("team-a", "u", "Title", nul)
+    with pytest.raises(InvalidInputError, match="tags contains"):
+        service.create("team-a", "u", "Title", "body", [nul])
+    with pytest.raises(InvalidInputError, match="q contains"):
+        service.list_notes("team-a", q="\x00")
+    with pytest.raises(InvalidInputError, match="tag contains"):
+        service.list_notes("team-a", tag=nul)

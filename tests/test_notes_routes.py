@@ -337,3 +337,40 @@ def test_unreadable_body_is_422_invalid_input(client, raw_body):
     )
 
     assert_error(response, 422, "invalid_input")
+
+
+# ---- size and identity limits -------------------------------------------
+
+
+def test_a_huge_request_body_is_refused_before_it_is_read(client):
+    response = client.post(
+        "/notes",
+        content=b"x" * 200_000,
+        headers={**TEAM_A, "Content-Type": "application/json"},
+    )
+
+    assert_error(response, 413, "payload_too_large")
+
+
+def test_a_note_at_every_limit_still_fits_under_the_size_cap(client):
+    response = client.post(
+        "/notes",
+        json={
+            "title": "t" * 200,
+            "body": "b" * 10_000,
+            "tags": [f"{i:02d}".ljust(30, "x") for i in range(20)],
+        },
+        headers=TEAM_A,
+    )
+
+    assert response.status_code == 201
+
+
+def test_identity_headers_are_capped_at_100_characters(client):
+    longest = {"X-Team-Id": "t" * 100, "X-User-Id": "u" * 100}
+    too_long_team = {"X-Team-Id": "t" * 101, "X-User-Id": "u"}
+    too_long_user = {"X-Team-Id": "t", "X-User-Id": "u" * 101}
+
+    assert client.get("/notes", headers=longest).status_code == 200
+    assert_error(client.get("/notes", headers=too_long_team), 400, "invalid_header")
+    assert_error(client.get("/notes", headers=too_long_user), 400, "invalid_header")
