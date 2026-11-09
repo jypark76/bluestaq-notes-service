@@ -24,6 +24,10 @@ The database is a SQLite file named `notes.db`, created on first run. Set `NOTES
 
     pytest
 
+Lint and format check:
+
+    ruff check . && ruff format --check .
+
 ## What I built
 
 Every `/notes` call needs two headers: `X-Team-Id` (whose notes) and `X-User-Id` (who is calling, saved as the author). A missing or blank header returns 400.

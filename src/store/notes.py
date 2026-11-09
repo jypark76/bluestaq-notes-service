@@ -1,8 +1,8 @@
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 from src.types import Note
 
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS note_tags (
 
 def _utc_now() -> str:
     """Current time as a text timestamp, always in UTC."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _escape_like(text: str) -> str:

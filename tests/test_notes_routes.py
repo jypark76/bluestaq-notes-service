@@ -191,7 +191,9 @@ def test_patch_other_teams_note_is_404_and_changes_nothing(client):
     )
 
     assert_error(response, 404, "not_found")
-    assert client.get(f"/notes/{created['id']}", headers=TEAM_A).json()["title"] == "Mine"
+    assert (
+        client.get(f"/notes/{created['id']}", headers=TEAM_A).json()["title"] == "Mine"
+    )
 
 
 # ---- delete ----------------------------------------------------------
@@ -266,7 +268,9 @@ def test_client_cannot_choose_team_or_author_through_the_body(client):
 
 
 def test_body_length_limit_at_the_edge(client):
-    ok = client.post("/notes", json={"title": "T", "body": "x" * 10_000}, headers=TEAM_A)
+    ok = client.post(
+        "/notes", json={"title": "T", "body": "x" * 10_000}, headers=TEAM_A
+    )
     too_long = client.post(
         "/notes", json={"title": "T", "body": "x" * 10_001}, headers=TEAM_A
     )
@@ -331,7 +335,9 @@ def test_unicode_survives_the_full_http_round_trip(client):
 )
 def test_lone_surrogate_in_json_is_422_not_500(client, raw_body):
     response = client.post(
-        "/notes", content=raw_body, headers={**TEAM_A, "Content-Type": "application/json"}
+        "/notes",
+        content=raw_body,
+        headers={**TEAM_A, "Content-Type": "application/json"},
     )
 
     assert_error(response, 422, "invalid_input")

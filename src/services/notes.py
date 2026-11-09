@@ -61,7 +61,9 @@ class NoteService:
         q = (q or "").strip() or None
         tag = (tag or "").strip().lower() or None
         if q and len(q) > MAX_SEARCH_LENGTH:
-            raise InvalidInputError(f"q must be {MAX_SEARCH_LENGTH} characters or fewer")
+            raise InvalidInputError(
+                f"q must be {MAX_SEARCH_LENGTH} characters or fewer"
+            )
         return self._store.list_notes(team_id, limit, offset, q=q, tag=tag)
 
     def update(
