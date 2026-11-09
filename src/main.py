@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.errors import InvalidInputError, MissingIdentityError, NotFoundError
 from src.routes.notes import router as notes_router
@@ -57,12 +58,26 @@ def create_app(db_path: str | None = None) -> FastAPI:
             status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "unexpected error"
         )
 
+    @app.exception_handler(StarletteHTTPException)
+    def http_problem(_: Request, exc: StarletteHTTPException):
+        # Unknown URL (404), wrong method (405) and similar. Without this
+        # they would come back in FastAPI's own {"detail": ...} shape.
+        code = {404: "not_found", 405: "method_not_allowed"}.get(
+            exc.status_code, "http_error"
+        )
+        return _error(exc.status_code, code, str(exc.detail))
+
     @app.exception_handler(RequestValidationError)
     def bad_shape(_: Request, exc: RequestValidationError):
         # The request was the wrong shape (missing field, wrong type, bad JSON).
+        # Name the field, and say "body" when the whole body is the problem.
         first = exc.errors()[0]
-        where = ".".join(str(part) for part in first["loc"] if part != "body")
-        message = f"{where}: {first['msg']}" if where else first["msg"]
-        return _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_input", message)
+        names = [str(p) for p in first["loc"] if p != "body" and not isinstance(p, int)]
+        where = ".".join(names) or "body"
+        return _error(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "invalid_input",
+            f"{where}: {first['msg']}",
+        )
 
     return app

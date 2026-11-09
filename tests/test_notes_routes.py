@@ -374,3 +374,30 @@ def test_docs_page_lists_the_two_identity_headers_on_every_notes_endpoint(client
         assert {"x-team-id", "x-user-id"} <= names, (path, method)
 
     assert "parameters" not in paths["/health"]["get"]
+
+
+# ---- every error uses the same shape ----------------------------------
+
+
+def test_unknown_url_and_wrong_method_use_the_error_shape(client):
+    assert_error(client.get("/nope", headers=TEAM_A), 404, "not_found")
+    assert_error(client.put("/notes", headers=TEAM_A), 405, "method_not_allowed")
+    assert_error(client.post("/health"), 405, "method_not_allowed")
+
+
+def test_validation_messages_name_the_field(client):
+    no_body = client.post("/notes", headers=TEAM_A)
+    no_title = client.post("/notes", json={"body": "b"}, headers=TEAM_A)
+    bad_tag_type = client.post(
+        "/notes", json={"title": "t", "body": "b", "tags": [1]}, headers=TEAM_A
+    )
+    bad_json = client.post(
+        "/notes",
+        content="{not json",
+        headers={**TEAM_A, "Content-Type": "application/json"},
+    )
+
+    assert no_body.json()["error"]["message"].startswith("body:")
+    assert no_title.json()["error"]["message"].startswith("title:")
+    assert bad_tag_type.json()["error"]["message"].startswith("tags:")
+    assert bad_json.json()["error"]["message"].startswith("body:")

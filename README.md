@@ -45,7 +45,7 @@ Every `/notes` call needs two headers: `X-Team-Id` (whose notes) and `X-User-Id`
 - Tags are trimmed, lowercased and de-duplicated, at most 30 characters each and 20 per note.
 - Text must be storable as UTF-8. `q` and `tag` can be combined with paging, and `total` counts every match.
 
-Every error has one shape: `{"error": {"code": "not_found", "message": "note not found"}}`. The codes are `missing_header` (400), `not_found` (404) and `invalid_input` (422). Bad input gets a 4xx. A 500 (`internal_error`) means a bug on my side, and its details stay in the server log.
+Every error has one shape: `{"error": {"code": "not_found", "message": "note not found"}}`. The codes are `missing_header` (400), `not_found` (404, also for an unknown URL), `method_not_allowed` (405) and `invalid_input` (422, with the field named in the message). Bad input gets a 4xx. A 500 (`internal_error`) means a bug on my side, and its details stay in the server log.
 
 ## Assumptions
 
