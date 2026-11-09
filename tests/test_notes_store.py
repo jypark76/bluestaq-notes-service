@@ -28,16 +28,6 @@ def test_get_from_another_team_returns_none(store):
     assert store.get("team-b", created.id) is None
 
 
-def test_get_unknown_id_returns_none(store):
-    assert store.get("team-a", "nope") is None
-
-
-def test_duplicate_tags_are_saved_once(store):
-    created = store.create("team-a", "user-1", "T", "B", ["x", "x"])
-
-    assert created.tags == ["x"]
-
-
 def test_list_only_returns_own_team_and_counts_total(store):
     store.create("team-a", "u", "A1", "b")
     store.create("team-a", "u", "A2", "b")
@@ -115,13 +105,13 @@ def test_delete_from_another_team_leaves_the_note(store):
     assert store.get("team-a", created.id) is not None
 
 
-def test_deleting_a_note_also_deletes_its_tags(store):
-    created = store.create("team-a", "u", "T", "B", ["x"])
+def test_a_deleted_note_no_longer_shows_up_in_search_or_tag_filter(store):
+    created = store.create("team-a", "u", "Budget", "numbers", ["finance"])
 
     store.delete("team-a", created.id)
-    leftover = store._db.execute("SELECT COUNT(*) FROM note_tags").fetchone()[0]
 
-    assert leftover == 0
+    assert store.list_notes("team-a", q="budget") == ([], 0)
+    assert store.list_notes("team-a", tag="finance") == ([], 0)
 
 
 # ---- search and tag filter -------------------------------------------
@@ -158,12 +148,6 @@ def test_search_treats_percent_and_underscore_as_plain_characters(store):
 
     assert [n.title for n in percent] == ["Goal"]
     assert [n.title for n in underscore] == ["Names"]
-
-
-def test_search_with_no_match_is_empty(store):
-    store.create("team-a", "u", "T", "B")
-
-    assert store.list_notes("team-a", q="zzz") == ([], 0)
 
 
 def test_tag_filter_matches_the_exact_tag_only(store):

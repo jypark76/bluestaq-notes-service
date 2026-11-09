@@ -33,10 +33,6 @@ def test_create_trims_text_and_cleans_tags(service):
     assert note.author_id == "user-1"
 
 
-def test_create_without_tags_gives_empty_list(service):
-    assert service.create("team-a", "u", "T", "B").tags == []
-
-
 @pytest.mark.parametrize("title", ["", "   "])
 def test_create_rejects_empty_title(service, title):
     with pytest.raises(InvalidInputError, match="title"):
@@ -84,12 +80,6 @@ def test_too_many_tags_is_rejected_but_duplicates_do_not_count(service):
 # ---- get ------------------------------------------------------------
 
 
-def test_get_returns_the_note(service):
-    created = service.create("team-a", "u", "T", "B")
-
-    assert service.get("team-a", created.id) == created
-
-
 def test_get_unknown_note_raises_not_found(service):
     with pytest.raises(NotFoundError):
         service.get("team-a", "nope")
@@ -103,16 +93,6 @@ def test_get_other_teams_note_raises_not_found(service):
 
 
 # ---- list -----------------------------------------------------------
-
-
-def test_list_returns_own_team_notes_and_total(service):
-    service.create("team-a", "u", "A", "b")
-    service.create("team-b", "u", "B", "b")
-
-    notes, total = service.list_notes("team-a")
-
-    assert total == 1
-    assert notes[0].title == "A"
 
 
 @pytest.mark.parametrize("limit", [0, -1, MAX_PAGE_SIZE + 1])

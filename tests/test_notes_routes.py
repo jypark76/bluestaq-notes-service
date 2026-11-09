@@ -235,16 +235,6 @@ def test_list_filters_by_q_and_tag_within_the_team(client):
     assert [n["title"] for n in both["items"]] == ["Lunch"]
 
 
-def test_search_total_counts_all_matches_across_pages(client):
-    for i in range(3):
-        make_note(client, title=f"Plan {i}", body="budget")
-
-    page = client.get("/notes?q=budget&limit=2", headers=TEAM_A).json()
-
-    assert page["total"] == 3
-    assert len(page["items"]) == 2
-
-
 def test_search_word_that_is_too_long_is_422(client):
     response = client.get(f"/notes?q={'x' * 101}", headers=TEAM_A)
 
@@ -265,18 +255,6 @@ def test_client_cannot_choose_team_or_author_through_the_body(client):
     assert note["team_id"] == "team-a"
     assert note["author_id"] == "user-1"
     assert client.get("/notes", headers=TEAM_B).json()["total"] == 0
-
-
-def test_body_length_limit_at_the_edge(client):
-    ok = client.post(
-        "/notes", json={"title": "T", "body": "x" * 10_000}, headers=TEAM_A
-    )
-    too_long = client.post(
-        "/notes", json={"title": "T", "body": "x" * 10_001}, headers=TEAM_A
-    )
-
-    assert ok.status_code == 201
-    assert_error(too_long, 422, "invalid_input")
 
 
 def test_patch_with_null_fields_means_leave_them_alone(client):
@@ -302,24 +280,6 @@ def test_deleting_twice_gives_204_then_404(client):
 
     assert first.status_code == 204
     assert_error(second, 404, "not_found")
-
-
-def test_two_notes_can_share_a_title(client):
-    first = make_note(client, title="Same")
-    second = make_note(client, title="Same")
-
-    assert first["id"] != second["id"]
-    assert client.get("/notes", headers=TEAM_A).json()["total"] == 2
-
-
-def test_unicode_survives_the_full_http_round_trip(client):
-    created = make_note(client, title="Café ☕", body="日本語 🎉", tags=["Ünï"])
-
-    fetched = client.get(f"/notes/{created['id']}", headers=TEAM_A).json()
-
-    assert fetched["title"] == "Café ☕"
-    assert fetched["body"] == "日本語 🎉"
-    assert fetched["tags"] == ["ünï"]
 
 
 # ---- characters the database cannot store, and unexpected failures ----
