@@ -349,3 +349,22 @@ def test_unexpected_failure_still_uses_the_error_shape_and_hides_details():
 
     assert_error(response, 500, "internal_error")
     assert "secret" not in response.text
+
+
+# ---- the /docs page --------------------------------------------------
+
+
+def test_docs_page_lists_the_two_identity_headers_on_every_notes_endpoint(client):
+    paths = client.get("/openapi.json").json()["paths"]
+
+    for path, method in [
+        ("/notes", "post"),
+        ("/notes", "get"),
+        ("/notes/{note_id}", "get"),
+        ("/notes/{note_id}", "patch"),
+        ("/notes/{note_id}", "delete"),
+    ]:
+        names = {p["name"] for p in paths[path][method]["parameters"]}
+        assert {"x-team-id", "x-user-id"} <= names, (path, method)
+
+    assert "parameters" not in paths["/health"]["get"]

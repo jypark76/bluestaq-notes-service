@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from src.errors import MissingIdentityError
 from src.services.notes import DEFAULT_PAGE_SIZE, NoteService
@@ -7,13 +7,18 @@ from src.types import Identity, NoteCreate, NoteList, NoteOut, NoteUpdate
 router = APIRouter(prefix="/notes", tags=["notes"])
 
 
-def get_identity(request: Request) -> Identity:
+def get_identity(
+    x_team_id: str | None = Header(default=None, description="Which team's notes"),
+    x_user_id: str | None = Header(default=None, description="Who is calling"),
+) -> Identity:
     """Read who is calling from the X-Team-Id and X-User-Id headers.
 
     There is no real login in this project. The headers stand in for it.
+    Declaring them here makes them show up as fields on the /docs page.
+    A missing header is checked by hand so it gives our own 400 error.
     """
-    team_id = request.headers.get("x-team-id", "").strip()
-    user_id = request.headers.get("x-user-id", "").strip()
+    team_id = (x_team_id or "").strip()
+    user_id = (x_user_id or "").strip()
     if not team_id:
         raise MissingIdentityError("X-Team-Id header is required")
     if not user_id:
