@@ -1,4 +1,3 @@
-import logging
 import os
 
 from fastapi import FastAPI, Request, status
@@ -56,9 +55,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     @app.exception_handler(Exception)
     def unexpected(_: Request, exc: Exception):
-        # A bug on our side. The caller still gets the same error shape,
-        # and the details stay in the server log instead of the response.
-        logging.getLogger("uvicorn.error").exception("unhandled error", exc_info=exc)
+        # A bug on our side. The caller still gets the same error shape.
+        # The server logs the full traceback itself after this response goes
+        # out, so we do not log it here too (that printed every error twice).
         return _error(
             status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "unexpected error"
         )
