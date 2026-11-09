@@ -53,8 +53,11 @@ def test_title_length_limit_is_inclusive(service):
         service.create("team-a", "u", "x" * (MAX_TITLE_LENGTH + 1), "b")
 
 
-def test_body_too_long_is_rejected(service):
-    with pytest.raises(InvalidInputError, match="body"):
+def test_body_length_limit_is_inclusive(service):
+    ok = service.create("team-a", "u", "T", "x" * MAX_BODY_LENGTH)
+    assert len(ok.body) == MAX_BODY_LENGTH
+
+    with pytest.raises(InvalidInputError, match="body must be"):
         service.create("team-a", "u", "T", "x" * (MAX_BODY_LENGTH + 1))
 
 
@@ -63,8 +66,11 @@ def test_blank_tag_is_rejected(service):
         service.create("team-a", "u", "T", "B", ["ok", "  "])
 
 
-def test_tag_length_limit(service):
-    with pytest.raises(InvalidInputError, match="tag"):
+def test_tag_length_limit_is_inclusive(service):
+    ok = service.create("team-a", "u", "T", "B", ["x" * MAX_TAG_LENGTH])
+    assert ok.tags == ["x" * MAX_TAG_LENGTH]
+
+    with pytest.raises(InvalidInputError, match="each tag must be"):
         service.create("team-a", "u", "T", "B", ["x" * (MAX_TAG_LENGTH + 1)])
 
 
@@ -102,7 +108,12 @@ def test_list_rejects_bad_limit(service, limit):
 
 
 def test_list_accepts_the_largest_allowed_limit(service):
-    service.list_notes("team-a", limit=MAX_PAGE_SIZE)
+    created = service.create("team-a", "u", "T", "B")
+
+    notes, total = service.list_notes("team-a", limit=MAX_PAGE_SIZE)
+
+    assert notes == [created]
+    assert total == 1
 
 
 def test_list_rejects_negative_offset(service):
@@ -207,8 +218,12 @@ def test_blank_search_and_blank_tag_mean_no_filter(service):
 
 
 def test_search_word_length_limit_is_inclusive(service):
-    service.list_notes("team-a", q="x" * MAX_SEARCH_LENGTH)
+    longest = "x" * MAX_SEARCH_LENGTH
+    created = service.create("team-a", "u", longest, "B")
 
+    notes, _ = service.list_notes("team-a", q=longest)
+
+    assert notes == [created]
     with pytest.raises(InvalidInputError, match="q must"):
         service.list_notes("team-a", q="x" * (MAX_SEARCH_LENGTH + 1))
 
@@ -219,13 +234,13 @@ def test_search_word_length_limit_is_inclusive(service):
 def test_text_with_a_lone_surrogate_is_rejected_not_crashed(service):
     bad = "\ud800"  # legal in JSON, but cannot be saved as UTF-8
 
-    with pytest.raises(InvalidInputError, match="title"):
+    with pytest.raises(InvalidInputError, match="title contains"):
         service.create("team-a", "u", bad, "body")
-    with pytest.raises(InvalidInputError, match="body"):
+    with pytest.raises(InvalidInputError, match="body contains"):
         service.create("team-a", "u", "Title", bad)
-    with pytest.raises(InvalidInputError, match="tags"):
+    with pytest.raises(InvalidInputError, match="tags contains"):
         service.create("team-a", "u", "Title", "body", [bad])
-    with pytest.raises(InvalidInputError, match="q"):
+    with pytest.raises(InvalidInputError, match="q contains"):
         service.list_notes("team-a", q=bad)
-    with pytest.raises(InvalidInputError, match="tag"):
+    with pytest.raises(InvalidInputError, match="tag contains"):
         service.list_notes("team-a", tag=bad)

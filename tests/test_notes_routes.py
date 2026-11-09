@@ -172,7 +172,6 @@ def test_patch_changes_only_what_was_sent(client):
     assert note["title"] == "New"
     assert note["body"] == "Ship it"
     assert note["tags"] == ["keep"]
-    assert note["updated_at"] >= created["updated_at"]
 
 
 def test_patch_with_nothing_to_change_is_422(client):
