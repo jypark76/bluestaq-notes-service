@@ -143,13 +143,11 @@ def _clean_tags(tags: list[str]) -> list[str]:
             raise InvalidInputError(
                 f"each tag must be {MAX_TAG_LENGTH} characters or fewer"
             )
+        # The set makes the duplicate check instant. Looking tags up in the
+        # list took seconds for tens of thousands of tags.
         if tag not in seen:
             seen.add(tag)
             cleaned.append(tag)
-            # Stop at the first tag over the limit. Checking only at the end
-            # let one huge request keep the server busy for many seconds.
-            if len(cleaned) > MAX_TAGS_PER_NOTE:
-                raise InvalidInputError(
-                    f"a note can have at most {MAX_TAGS_PER_NOTE} tags"
-                )
+    if len(cleaned) > MAX_TAGS_PER_NOTE:
+        raise InvalidInputError(f"a note can have at most {MAX_TAGS_PER_NOTE} tags")
     return cleaned

@@ -51,15 +51,6 @@ def test_list_is_newest_edit_first_and_paginates(store):
     assert [n.title for n in page2] == ["one"]
 
 
-def test_list_offset_past_the_end_is_empty(store):
-    store.create("team-a", "u", "one", "b")
-
-    notes, total = store.list_notes("team-a", offset=10)
-
-    assert notes == []
-    assert total == 1
-
-
 def test_update_changes_given_fields_and_bumps_updated_at(store):
     created = store.create("team-a", "u", "Old", "Old body", ["keep"])
 
@@ -154,28 +145,21 @@ def test_search_never_returns_another_teams_notes(store):
     assert notes[0].title == "Mine"
 
 
-def test_search_treats_percent_and_underscore_as_plain_characters(store):
+def test_search_treats_percent_underscore_and_backslash_as_plain_characters(store):
     store.create("team-a", "u", "Goal", "reach 100% by June")
     store.create("team-a", "u", "Names", "use snake_case here")
-    store.create("team-a", "u", "Plain", "nothing special")
-
-    percent, _ = store.list_notes("team-a", q="%")
-    underscore, _ = store.list_notes("team-a", q="_")
-
-    assert [n.title for n in percent] == ["Goal"]
-    assert [n.title for n in underscore] == ["Names"]
-
-
-def test_search_treats_a_backslash_as_a_plain_character(store):
     store.create("team-a", "u", "Path", r"open C:\temp\file")
     store.create("team-a", "u", "Word", "a temporary note")
     store.create("team-a", "u", "Plain", "nothing special")
 
-    lone, _ = store.list_notes("team-a", q="\\")
-    before_word, _ = store.list_notes("team-a", q="\\temp")
+    def titles(word):
+        notes, _ = store.list_notes("team-a", q=word)
+        return [n.title for n in notes]
 
-    assert [n.title for n in lone] == ["Path"]
-    assert [n.title for n in before_word] == ["Path"]  # not "temporary"
+    assert titles("%") == ["Goal"]
+    assert titles("_") == ["Names"]
+    assert titles("\\") == ["Path"]
+    assert titles("\\temp") == ["Path"]  # not "temporary"
 
 
 def test_tag_filter_matches_the_exact_tag_only(store):

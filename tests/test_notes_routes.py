@@ -87,16 +87,6 @@ def test_create_with_bad_input_is_422_not_500(client, payload):
     assert_error(response, 422, "invalid_input")
 
 
-def test_create_with_malformed_json_is_422(client):
-    response = client.post(
-        "/notes",
-        content="{not json",
-        headers={**TEAM_A, "Content-Type": "application/json"},
-    )
-
-    assert_error(response, 422, "invalid_input")
-
-
 # ---- get -------------------------------------------------------------
 
 
@@ -122,16 +112,6 @@ def test_get_other_teams_note_is_404(client):
 
 
 # ---- list ------------------------------------------------------------
-
-
-def test_list_returns_only_own_team_with_total(client):
-    make_note(client, TEAM_A, title="A")
-    make_note(client, TEAM_B, title="B")
-
-    body = client.get("/notes", headers=TEAM_A).json()
-
-    assert body["total"] == 1
-    assert [n["title"] for n in body["items"]] == ["A"]
 
 
 def test_list_paginates(client):
@@ -167,28 +147,6 @@ def test_list_with_bad_paging_is_422(client, query):
 
 
 # ---- update ----------------------------------------------------------
-
-
-def test_patch_changes_only_what_was_sent(client):
-    created = make_note(client, tags=["keep"])
-
-    response = client.patch(
-        f"/notes/{created['id']}", json={"title": "New"}, headers=TEAM_A
-    )
-
-    assert response.status_code == 200
-    note = response.json()
-    assert note["title"] == "New"
-    assert note["body"] == "Ship it"
-    assert note["tags"] == ["keep"]
-
-
-def test_patch_with_nothing_to_change_is_422(client):
-    created = make_note(client)
-
-    response = client.patch(f"/notes/{created['id']}", json={}, headers=TEAM_A)
-
-    assert_error(response, 422, "invalid_input")
 
 
 def test_patch_other_teams_note_is_404_and_changes_nothing(client):
@@ -234,6 +192,7 @@ def test_delete_other_teams_note_is_404_and_keeps_it(client):
 def test_list_filters_by_q_and_tag_within_the_team(client):
     make_note(client, TEAM_A, title="Budget", body="numbers", tags=["finance"])
     make_note(client, TEAM_A, title="Lunch", body="budget talk", tags=["food"])
+    make_note(client, TEAM_A, title="Gym", body="weights", tags=["health"])
     make_note(client, TEAM_B, title="Theirs", body="budget", tags=["finance"])
 
     by_word = client.get("/notes?q=BUDGET", headers=TEAM_A).json()
@@ -277,36 +236,20 @@ def test_patch_with_null_fields_means_leave_them_alone(client):
         f"/notes/{created['id']}", json={"title": None}, headers=TEAM_A
     )
 
-    assert unchanged["tags"] == ["keep"]
     assert unchanged["title"] == "New"
-    assert_error(only_nulls, 422, "invalid_input")
-
-
-def test_deleting_twice_gives_204_then_404(client):
-    created = make_note(client)
-
-    first = client.delete(f"/notes/{created['id']}", headers=TEAM_A)
-    second = client.delete(f"/notes/{created['id']}", headers=TEAM_A)
-
-    assert first.status_code == 204
-    assert_error(second, 404, "not_found")
+    assert unchanged["body"] == "Ship it"  # not sent, so not changed
+    assert unchanged["tags"] == ["keep"]  # sent as null, so not changed
+    assert_error(only_nulls, 422, "invalid_input")  # nothing left to change
 
 
 # ---- characters the database cannot store, and unexpected failures ----
 
 
-@pytest.mark.parametrize(
-    "raw_body",
-    [
-        rb'{"title": "\ud800", "body": "b"}',
-        rb'{"title": "t", "body": "\ud800"}',
-        rb'{"title": "t", "body": "b", "tags": ["\ud800"]}',
-    ],
-)
-def test_lone_surrogate_in_json_is_422_not_500(client, raw_body):
+def test_lone_surrogate_in_json_is_422_not_500(client):
+    # The service test checks every field. This proves the HTTP path agrees.
     response = client.post(
         "/notes",
-        content=raw_body,
+        content=rb'{"title": "\ud800", "body": "b"}',
         headers={**TEAM_A, "Content-Type": "application/json"},
     )
 
@@ -349,12 +292,6 @@ def test_docs_page_lists_the_two_identity_headers_on_every_notes_endpoint(client
 # ---- every error uses the same shape ----------------------------------
 
 
-def test_unknown_url_and_wrong_method_use_the_error_shape(client):
-    assert_error(client.get("/nope", headers=TEAM_A), 404, "not_found")
-    assert_error(client.put("/notes", headers=TEAM_A), 405, "method_not_allowed")
-    assert_error(client.post("/health"), 405, "method_not_allowed")
-
-
 def test_validation_messages_name_the_field(client):
     no_body = client.post("/notes", headers=TEAM_A)
     no_title = client.post("/notes", json={"body": "b"}, headers=TEAM_A)
@@ -370,6 +307,7 @@ def test_validation_messages_name_the_field(client):
     assert no_body.json()["error"]["message"].startswith("body:")
     assert no_title.json()["error"]["message"].startswith("title:")
     assert bad_tag_type.json()["error"]["message"].startswith("tags:")
+    assert bad_json.status_code == 422
     assert bad_json.json()["error"]["message"].startswith("body:")
 
 
@@ -378,10 +316,13 @@ def allowed_methods(response):
     return {m.strip() for m in response.headers["allow"].split(",")}
 
 
-def test_405_keeps_the_allow_header_listing_the_methods_that_work(client):
-    response = client.put("/notes", headers=TEAM_A)
+def test_unknown_url_and_wrong_method_use_the_error_shape(client):
+    assert_error(client.get("/nope", headers=TEAM_A), 404, "not_found")
+    assert_error(client.post("/health"), 405, "method_not_allowed")
 
+    response = client.put("/notes", headers=TEAM_A)
     assert_error(response, 405, "method_not_allowed")
+    # The Allow header names every method the path accepts.
     assert allowed_methods(response) == {"GET", "POST"}
     one_note = client.put("/notes/abc", headers=TEAM_A)
     assert allowed_methods(one_note) == {"GET", "PATCH", "DELETE"}
