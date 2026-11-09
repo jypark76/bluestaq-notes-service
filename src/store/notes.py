@@ -2,7 +2,7 @@ import sqlite3
 import threading
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from src.types import Note
 
@@ -56,6 +56,25 @@ class NoteStore:
         self._db.executescript(SCHEMA)
         self._lock = threading.Lock()
         self._now = now  # swappable so tests can control the clock
+        # The newest timestamp handed out so far, so a restart keeps counting up.
+        self._last: str | None = self._db.execute(
+            "SELECT MAX(updated_at) FROM notes"
+        ).fetchone()[0]
+
+    def _stamp(self) -> str:
+        """A timestamp that is always later than the one before it.
+
+        A coarse clock (about 16 ms on Windows) can give two writes the same
+        time, and then "newest first" would fall back to the random id. If the
+        clock has not moved, nudge it forward by one microsecond.
+        """
+        stamp = self._now()
+        if self._last is not None and stamp <= self._last:
+            stamp = (
+                datetime.fromisoformat(self._last) + timedelta(microseconds=1)
+            ).isoformat()
+        self._last = stamp
+        return stamp
 
     # ---- create ----------------------------------------------------
 
@@ -69,8 +88,8 @@ class NoteStore:
     ) -> Note:
         """Save a new note and return it."""
         note_id = uuid.uuid4().hex
-        stamp = self._now()
         with self._lock, self._db:  # "with self._db" saves, or undoes on error
+            stamp = self._stamp()
             self._db.execute(
                 "INSERT INTO notes (id, team_id, author_id, title, body,"
                 " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -147,7 +166,7 @@ class NoteStore:
                 "UPDATE notes SET title = COALESCE(?, title),"
                 " body = COALESCE(?, body), updated_at = ?"
                 " WHERE id = ? AND team_id = ?",
-                (title, body, self._now(), note_id, team_id),
+                (title, body, self._stamp(), note_id, team_id),
             )
             if cursor.rowcount == 0:
                 return None

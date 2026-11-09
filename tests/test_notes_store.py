@@ -1,4 +1,5 @@
 import itertools
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -9,7 +10,39 @@ from src.store.notes import NoteStore
 def store():
     """A fresh empty database for each test, with a clock that ticks 1 second."""
     ticks = itertools.count(1)
-    return NoteStore(":memory:", now=lambda: f"2026-01-01T00:00:{next(ticks):02d}")
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    return NoteStore(
+        ":memory:", now=lambda: (start + timedelta(seconds=next(ticks))).isoformat()
+    )
+
+
+def test_writes_in_the_same_clock_tick_still_sort_newest_first():
+    frozen = NoteStore(":memory:", now=lambda: "2026-01-01T00:00:00+00:00")
+    old = frozen.create("team-a", "u", "old", "b")
+    frozen.create("team-a", "u", "middle", "b")
+    frozen.create("team-a", "u", "newest", "b")
+
+    created_order = [n.title for n in frozen.list_notes("team-a")[0]]
+    frozen.update("team-a", old.id, body="edited")
+    after_edit = [n.title for n in frozen.list_notes("team-a")[0]]
+
+    assert created_order == ["newest", "middle", "old"]
+    assert after_edit == ["old", "newest", "middle"]
+
+
+def test_timestamps_keep_counting_up_after_a_restart(tmp_path):
+    db_file = str(tmp_path / "notes.db")
+    first = NoteStore(db_file, now=lambda: "2026-01-01T00:00:00+00:00")
+    for i in range(6):
+        first.create("team-a", "u", f"before {i}", "b")
+
+    second = NoteStore(db_file, now=lambda: "2026-01-01T00:00:00+00:00")
+    for i in range(6):
+        second.create("team-a", "u", f"after {i}", "b")
+
+    # Six of each: a random order of ties would almost never come out right.
+    titles = [n.title.split()[0] for n in second.list_notes("team-a")[0]]
+    assert titles == ["after"] * 6 + ["before"] * 6
 
 
 def test_create_then_get_returns_the_same_note(store):
