@@ -369,3 +369,22 @@ def test_validation_messages_name_the_field(client):
     assert no_title.json()["error"]["message"].startswith("title:")
     assert bad_tag_type.json()["error"]["message"].startswith("tags:")
     assert bad_json.json()["error"]["message"].startswith("body:")
+
+
+def test_405_keeps_the_allow_header_listing_the_methods_that_work(client):
+    response = client.put("/notes", headers=TEAM_A)
+
+    assert_error(response, 405, "method_not_allowed")
+    allowed = {m.strip() for m in response.headers["allow"].split(",")}
+    assert {"GET", "POST"} <= allowed
+
+
+@pytest.mark.parametrize("raw_body", [b"\xff\xfe{", b"[" * 100_000])
+def test_unreadable_body_is_422_invalid_input(client, raw_body):
+    response = client.post(
+        "/notes",
+        content=raw_body,
+        headers={**TEAM_A, "Content-Type": "application/json"},
+    )
+
+    assert_error(response, 422, "invalid_input")

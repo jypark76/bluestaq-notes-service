@@ -84,6 +84,20 @@ def test_too_many_tags_is_rejected_but_duplicates_do_not_count(service):
     assert service.create("team-a", "u", "T", "B", same_twenty_times).tags == ["a"]
 
 
+def test_too_many_tags_stops_at_the_first_tag_over_the_limit(service):
+    pulled = []
+
+    def endless_tags():
+        for i in range(1_000_000):
+            pulled.append(i)
+            yield f"t{i}"
+
+    with pytest.raises(InvalidInputError, match="at most"):
+        service.create("team-a", "u", "T", "B", endless_tags())
+
+    assert len(pulled) == MAX_TAGS_PER_NOTE + 1
+
+
 # ---- get ------------------------------------------------------------
 
 

@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Match
 
 from src.errors import InvalidInputError, MissingIdentityError, NotFoundError
 from src.routes.notes import router as notes_router
@@ -12,10 +13,14 @@ from src.services.notes import NoteService
 from src.store.notes import NoteStore
 
 
-def _error(status_code: int, code: str, message: str) -> JSONResponse:
+def _error(
+    status_code: int, code: str, message: str, headers: dict[str, str] | None = None
+) -> JSONResponse:
     """Every error leaves the service in this one shape."""
     return JSONResponse(
-        status_code=status_code, content={"error": {"code": code, "message": message}}
+        status_code=status_code,
+        content={"error": {"code": code, "message": message}},
+        headers=headers,
     )
 
 
@@ -59,13 +64,34 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    def http_problem(_: Request, exc: StarletteHTTPException):
+    def http_problem(request: Request, exc: StarletteHTTPException):
         # Unknown URL (404), wrong method (405) and similar. Without this
         # they would come back in FastAPI's own {"detail": ...} shape.
+        if exc.status_code == 400:
+            # The framework could not read the body at all (for example bytes
+            # that are not valid UTF-8). Treat it like any other bad input.
+            return _error(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                "invalid_input",
+                "body: could not be read",
+            )
         code = {404: "not_found", 405: "method_not_allowed"}.get(
             exc.status_code, "http_error"
         )
-        return _error(exc.status_code, code, str(exc.detail))
+        headers = dict(exc.headers or {})
+        if exc.status_code == 405:
+            # The framework lists only one route's methods. A 405 must name
+            # every method this path accepts, so try each one against the routes.
+            allowed = [
+                method
+                for method in ("GET", "POST", "PUT", "PATCH", "DELETE")
+                if any(
+                    route.matches({**request.scope, "method": method})[0] == Match.FULL
+                    for route in request.app.routes
+                )
+            ]
+            headers["Allow"] = ", ".join(allowed)
+        return _error(exc.status_code, code, str(exc.detail), headers)
 
     @app.exception_handler(RequestValidationError)
     def bad_shape(_: Request, exc: RequestValidationError):

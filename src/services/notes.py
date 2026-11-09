@@ -133,6 +133,7 @@ def _clean_body(body: str) -> str:
 def _clean_tags(tags: list[str]) -> list[str]:
     """Trim, lowercase and de-duplicate tags, keeping the order given."""
     cleaned: list[str] = []
+    seen: set[str] = set()
     for tag in tags:
         _check_text(tag, "tags")
         tag = tag.strip().lower()
@@ -142,8 +143,13 @@ def _clean_tags(tags: list[str]) -> list[str]:
             raise InvalidInputError(
                 f"each tag must be {MAX_TAG_LENGTH} characters or fewer"
             )
-        if tag not in cleaned:
+        if tag not in seen:
+            seen.add(tag)
             cleaned.append(tag)
-    if len(cleaned) > MAX_TAGS_PER_NOTE:
-        raise InvalidInputError(f"a note can have at most {MAX_TAGS_PER_NOTE} tags")
+            # Stop at the first tag over the limit. Checking only at the end
+            # let one huge request keep the server busy for many seconds.
+            if len(cleaned) > MAX_TAGS_PER_NOTE:
+                raise InvalidInputError(
+                    f"a note can have at most {MAX_TAGS_PER_NOTE} tags"
+                )
     return cleaned
