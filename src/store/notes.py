@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS note_tags (
     tag     TEXT NOT NULL,
     PRIMARY KEY (note_id, tag)
 );
+-- The primary key starts with note_id, so a lookup by tag needs its own index.
+CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags (tag, note_id);
 """
 
 
@@ -138,21 +140,19 @@ class NoteStore:
         or belongs to another team.
         """
         with self._lock, self._db:
-            if self._fetch(team_id, note_id) is None:
+            # One statement changes the fields and checks the team. COALESCE
+            # keeps the old value when we pass None. If nothing matched, the
+            # note is missing or another team's, and nothing else is touched.
+            cursor = self._db.execute(
+                "UPDATE notes SET title = COALESCE(?, title),"
+                " body = COALESCE(?, body), updated_at = ?"
+                " WHERE id = ? AND team_id = ?",
+                (title, body, self._now(), note_id, team_id),
+            )
+            if cursor.rowcount == 0:
                 return None
-            if title is not None:
-                self._db.execute(
-                    "UPDATE notes SET title = ? WHERE id = ?", (title, note_id)
-                )
-            if body is not None:
-                self._db.execute(
-                    "UPDATE notes SET body = ? WHERE id = ?", (body, note_id)
-                )
             if tags is not None:
                 self._write_tags(note_id, tags)
-            self._db.execute(
-                "UPDATE notes SET updated_at = ? WHERE id = ?", (self._now(), note_id)
-            )
             return self._fetch(team_id, note_id)
 
     # ---- delete ----------------------------------------------------

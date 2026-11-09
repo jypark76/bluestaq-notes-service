@@ -58,7 +58,7 @@ Every error has one shape: `{"error": {"code": "not_found", "message": "note not
 The three choices I spent the most time on:
 
 **1. Team isolation lives in one place, and another team's note looks missing.**
-Every store method takes a `team_id` and puts it first in the SQL `WHERE`, so search and tag filters can't reach another team's notes. Another team's note returns the same 404 as a note that doesn't exist, because a 403 would confirm the id is real. The cost: a mistyped id and a wrong team look alike when debugging.
+Every store method takes a `team_id` and includes it in the SQL `WHERE` that finds the note, so search, tag filters and updates can't reach another team's notes. Another team's note returns the same 404 as a note that doesn't exist, because a 403 would confirm the id is real. The cost: a mistyped id and a wrong team look alike when debugging.
 
 **2. Three layers, with SQLite behind a small store class.**
 Routes translate HTTP, the service holds the rules, and `NoteStore` holds all the SQL. I could test the rules with no web server, and moving to Postgres means rewriting one class. Request models check only shape, so each limit is written once, in the service. The cost: more files than a single module. SQLite also allows one writer at a time, so the store shares one connection behind a lock. That is fine here and would be the first thing to replace under heavy writes.
