@@ -196,3 +196,64 @@ def test_search_and_tag_combine_and_total_ignores_paging(store):
 
     assert total == 3  # all three matches, even though the page holds two
     assert len(notes) == 2
+
+
+# ---- edge cases ------------------------------------------------------
+
+
+def test_notes_survive_a_restart(tmp_path):
+    db_file = str(tmp_path / "notes.db")
+    first = NoteStore(db_file)
+    created = first.create("team-a", "u", "Keep me", "body", ["x"])
+
+    second = NoteStore(db_file)  # same file, like restarting the server
+
+    assert second.get("team-a", created.id) == created
+
+
+def test_editing_an_old_note_moves_it_to_the_top(store):
+    old = store.create("team-a", "u", "old", "b")
+    store.create("team-a", "u", "newer", "b")
+
+    store.update("team-a", old.id, body="edited")
+    notes, _ = store.list_notes("team-a")
+
+    assert [n.title for n in notes] == ["old", "newer"]
+
+
+def test_unicode_text_round_trips_and_is_searchable(store):
+    store.create("team-a", "u", "Café ☕ 日本語", "naïve résumé 🎉")
+
+    notes, total = store.list_notes("team-a", q="résumé")
+    emoji, _ = store.list_notes("team-a", q="🎉")
+
+    assert total == 1
+    assert notes[0].title == "Café ☕ 日本語"
+    assert len(emoji) == 1
+
+
+def test_many_threads_writing_at_once_lose_nothing(store):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def add(i):
+        store.create("team-a", "u", f"note {i}", "b", [f"t{i % 3}"])
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(add, range(100)))
+
+    _, total = store.list_notes("team-a", limit=1)
+    assert total == 100
+
+
+def test_sql_in_search_and_tag_is_treated_as_plain_text(store):
+    store.create("team-a", "u", "Safe", "b", ["x"])
+    attack = "' OR 1=1 --"
+
+    by_word = store.list_notes("team-a", q=attack)
+    by_tag = store.list_notes("team-a", tag=attack)
+    by_id = store.get("team-a", attack)
+
+    assert by_word == ([], 0)
+    assert by_tag == ([], 0)
+    assert by_id is None
+    assert store.list_notes("team-a")[1] == 1  # table is intact

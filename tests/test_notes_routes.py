@@ -247,3 +247,72 @@ def test_search_word_that_is_too_long_is_422(client):
     response = client.get(f"/notes?q={'x' * 101}", headers=TEAM_A)
 
     assert_error(response, 422, "invalid_input")
+
+
+# ---- edge cases ------------------------------------------------------
+
+
+def test_client_cannot_choose_team_or_author_through_the_body(client):
+    response = client.post(
+        "/notes",
+        json={"title": "T", "body": "B", "team_id": "team-b", "author_id": "boss"},
+        headers=TEAM_A,
+    )
+
+    note = response.json()
+    assert note["team_id"] == "team-a"
+    assert note["author_id"] == "user-1"
+    assert client.get("/notes", headers=TEAM_B).json()["total"] == 0
+
+
+def test_body_length_limit_at_the_edge(client):
+    ok = client.post("/notes", json={"title": "T", "body": "x" * 10_000}, headers=TEAM_A)
+    too_long = client.post(
+        "/notes", json={"title": "T", "body": "x" * 10_001}, headers=TEAM_A
+    )
+
+    assert ok.status_code == 201
+    assert_error(too_long, 422, "invalid_input")
+
+
+def test_patch_with_null_fields_means_leave_them_alone(client):
+    created = make_note(client, tags=["keep"])
+
+    unchanged = client.patch(
+        f"/notes/{created['id']}", json={"tags": None, "title": "New"}, headers=TEAM_A
+    ).json()
+    only_nulls = client.patch(
+        f"/notes/{created['id']}", json={"title": None}, headers=TEAM_A
+    )
+
+    assert unchanged["tags"] == ["keep"]
+    assert unchanged["title"] == "New"
+    assert_error(only_nulls, 422, "invalid_input")
+
+
+def test_deleting_twice_gives_204_then_404(client):
+    created = make_note(client)
+
+    first = client.delete(f"/notes/{created['id']}", headers=TEAM_A)
+    second = client.delete(f"/notes/{created['id']}", headers=TEAM_A)
+
+    assert first.status_code == 204
+    assert_error(second, 404, "not_found")
+
+
+def test_two_notes_can_share_a_title(client):
+    first = make_note(client, title="Same")
+    second = make_note(client, title="Same")
+
+    assert first["id"] != second["id"]
+    assert client.get("/notes", headers=TEAM_A).json()["total"] == 2
+
+
+def test_unicode_survives_the_full_http_round_trip(client):
+    created = make_note(client, title="Café ☕", body="日本語 🎉", tags=["Ünï"])
+
+    fetched = client.get(f"/notes/{created['id']}", headers=TEAM_A).json()
+
+    assert fetched["title"] == "Café ☕"
+    assert fetched["body"] == "日本語 🎉"
+    assert fetched["tags"] == ["ünï"]
