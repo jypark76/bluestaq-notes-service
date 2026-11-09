@@ -8,3 +8,7 @@ class NotFoundError(Exception):
 
 class InvalidInputError(Exception):
     """The caller sent something we refuse to save. The message says why."""
+
+
+class MissingIdentityError(Exception):
+    """A required X-Team-Id or X-User-Id header is missing or blank."""

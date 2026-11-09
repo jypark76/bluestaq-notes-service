@@ -5,7 +5,7 @@ from src.main import create_app
 
 def test_health_returns_ok():
     """The service starts and answers the health check."""
-    client = TestClient(create_app())
+    client = TestClient(create_app(":memory:"))
 
     response = client.get("/health")
 
